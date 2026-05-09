@@ -1,0 +1,155 @@
+<!--
+  =============================================================
+   Wazuh Custom Rules — ML-SOC Pipeline
+   File: /var/ossec/etc/rules/ml-soc-rules.xml
+   Permissions: chmod 640 | chown root:wazuh
+  =============================================================
+-->
+
+<group name="ml-soc,">
+
+  <!-- ── RULE 100099 — Parent pivot (all ML-SOC events) ────── -->
+  <rule id="100099" level="0">
+    <decoded_as>ml-soc-json</decoded_as>
+    <description>ML-SOC: event received from prediction pipeline</description>
+    <group>ml-soc-parent,</group>
+  </rule>
+
+  <!-- ═══════════════════════════════════════════════════════
+       NORMAL TRAFFIC
+  ══════════════════════════════════════════════════════════ -->
+  <rule id="100100" level="3">
+    <if_sid>100099</if_sid>
+    <field name="data.ml_label">^Normal$</field>
+    <description>ML-SOC | Normal traffic detected from $(data.src_ip)</description>
+    <group>normal,</group>
+  </rule>
+
+  <rule id="100101" level="3">
+    <if_sid>100099</if_sid>
+    <field name="data.ml_label">^BENIGN$</field>
+    <description>ML-SOC | Benign traffic detected from $(data.src_ip)</description>
+    <group>normal,</group>
+  </rule>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PORT SCAN   — MITRE T1046: Network Service Scanning
+  ══════════════════════════════════════════════════════════ -->
+  <rule id="100200" level="8">
+    <if_sid>100099</if_sid>
+    <field name="data.ml_label">^PortScan$</field>
+    <description>ML-SOC | PortScan activity from $(data.src_ip) to $(data.dst_ip)</description>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+    <group>portscan,pci_dss_11.4,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <rule id="100201" level="10">
+    <if_sid>100099</if_sid>
+    <field name="data.ml_label">^PortScan$</field>
+    <field name="data.confidence">\b(0\.9[0-9]|1\.0)\b</field>
+    <description>ML-SOC | High-confidence PortScan from $(data.src_ip) [confidence=$(data.confidence)]</description>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+    <group>portscan,high_confidence,</group>
+  </rule>
+
+  <!-- ═══════════════════════════════════════════════════════
+       BRUTE FORCE  — MITRE T1110: Brute Force
+  ══════════════════════════════════════════════════════════ -->
+  <rule id="100300" level="12">
+    <if_sid>100099</if_sid>
+    <field name="data.ml_label">^(BruteForce|Brute Force|FTP-BruteForce|SSH-BruteForce)$</field>
+    <description>ML-SOC | Brute Force attack from $(data.src_ip) vers $(data.dst_ip):$(data.dst_port)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>brute_force,authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <rule id="100301" level="14">
+    <if_sid>100099</if_sid>
+    <field name="data.ml_label">^(BruteForce|Brute Force|FTP-BruteForce|SSH-BruteForce)$</field>
+    <field name="data.confidence">\b(0\.9[0-9]|1\.0)\b</field>
+    <description>ML-SOC | CRITICAL Brute Force from $(data.src_ip) [confidence=$(data.confidence)]</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>brute_force,high_confidence,</group>
+  </rule>
+
+  <!-- ═══════════════════════════════════════════════════════
+       DDoS  — MITRE T1498: Network Denial of Service
+  ══════════════════════════════════════════════════════════ -->
+  <rule id="100400" level="14">
+    <if_sid>100099</if_sid>
+    <field name="data.ml_label">^(DDoS|DoS|DoS Hulk|DoS GoldenEye|DoS slowloris|DoS Slowhttptest)$</field>
+    <description>ML-SOC | DDoS attack detected from $(data.src_ip) vers $(data.dst_ip)</description>
+    <mitre>
+      <id>T1498</id>
+    </mitre>
+    <group>ddos,pci_dss_11.4,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <rule id="100401" level="15">
+    <if_sid>100099</if_sid>
+    <field name="data.ml_label">^(DDoS|DoS|DoS Hulk|DoS GoldenEye|DoS slowloris|DoS Slowhttptest)$</field>
+    <field name="data.confidence">\b(0\.9[0-9]|1\.0)\b</field>
+    <description>ML-SOC | CRITICAL DDoS from $(data.src_ip) [confidence=$(data.confidence)]</description>
+    <mitre>
+      <id>T1498</id>
+    </mitre>
+    <group>ddos,high_confidence,</group>
+  </rule>
+
+  <!-- ═══════════════════════════════════════════════════════
+       BOT  — MITRE T1071: Application Layer Protocol
+  ══════════════════════════════════════════════════════════ -->
+  <rule id="100500" level="10">
+    <if_sid>100099</if_sid>
+    <field name="data.ml_label">^Bot$</field>
+    <description>ML-SOC | Activité botnet depuis $(data.src_ip) vers $(data.dst_ip)</description>
+    <mitre>
+      <id>T1071</id>
+    </mitre>
+    <group>bot,malware,</group>
+  </rule>
+
+  <rule id="100501" level="13">
+    <if_sid>100099</if_sid>
+    <field name="data.ml_label">^Bot$</field>
+    <field name="data.confidence">\b(0\.9[0-9]|1\.0)\b</field>
+    <description>ML-SOC | CRITICAL botnet activity from $(data.src_ip) [confidence=$(data.confidence)]</description>
+    <mitre>
+      <id>T1071</id>
+    </mitre>
+    <group>bot,high_confidence,</group>
+  </rule>
+
+  <!-- ═══════════════════════════════════════════════════════
+       WEB ATTACK  — MITRE T1190: Exploit Public-Facing Application
+  ══════════════════════════════════════════════════════════ -->
+  <rule id="100600" level="12">
+    <if_sid>100099</if_sid>
+    <field name="data.ml_label">^(Web Attack|Web Attack – Brute Force|Web Attack – XSS|Web Attack – Sql Injection)$</field>
+    <description>ML-SOC | Attaque web depuis $(data.src_ip) vers $(data.dst_ip):$(data.dst_port)</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>web_attack,pci_dss_6.5,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <rule id="100601" level="14">
+    <if_sid>100099</if_sid>
+    <field name="data.ml_label">^(Web Attack|Web Attack – Brute Force|Web Attack – XSS|Web Attack – Sql Injection)$</field>
+    <field name="data.confidence">\b(0\.9[0-9]|1\.0)\b</field>
+    <description>ML-SOC | CRITICAL web attack from $(data.src_ip) [confidence=$(data.confidence)]</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>web_attack,high_confidence,</group>
+  </rule>
+
+</group>

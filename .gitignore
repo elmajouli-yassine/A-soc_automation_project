@@ -1,0 +1,37 @@
+# Secrets — never commit these
+.env
+*.env
+!*.env.example
+
+# OVA files (too large for git — use Releases)
+*.ova
+*.vmdk
+*.vdi
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+
+# Logs
+*.log
+logs/
+
+# Cortex job output
+cortex-jobs/
+
+# OpenSearch / Elasticsearch data
+opensearch/data/
+elasticsearch/data/
+
+# Shuffle data
+shuffle-database/
+shuffle-files/

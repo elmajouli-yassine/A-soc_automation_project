@@ -1,0 +1,138 @@
+version: "3.8"
+
+# =============================================================
+#  VM1 — TheHive + Cortex Stack
+#  A-SOC Project — ENSAM Casablanca
+#
+#  Usage:
+#    cp .env.example .env && nano .env
+#    docker compose up -d
+# =============================================================
+
+services:
+
+  # ── Cassandra (TheHive database backend) ──────────────────
+  cassandra:
+    image: cassandra:4.1.10
+    container_name: cassandra
+    restart: unless-stopped
+    hostname: cassandra
+    environment:
+      - CASSANDRA_CLUSTER_NAME=thp
+      - CASSANDRA_DC=DC1
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - MAX_HEAP_SIZE=1G
+      - HEAP_NEWSIZE=200M
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    networks:
+      - thehive-cortex-network
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+  # ── Elasticsearch (TheHive index backend) ─────────────────
+  elasticsearch:
+    image: elasticsearch:8.19.11
+    container_name: elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-ElasticPass321!}
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - thehive-cortex-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:${ELASTIC_PASSWORD:-ElasticPass321!} http://localhost:9200/_cluster/health | grep -v '\"status\":\"red\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+  # ── TheHive ───────────────────────────────────────────────
+  thehive:
+    image: strangebee/thehive:5.6.0
+    container_name: thehive
+    restart: unless-stopped
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./thehive/config:/etc/thehive:ro        # config is read-only inside container
+      - thehive_files:/opt/thp/thehive/files
+    environment:
+      - JVM_OPTS=-Xms1g -Xmx2g
+    networks:
+      - thehive-cortex-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/thehive/api/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+  # ── Cortex ────────────────────────────────────────────────
+  cortex:
+    image: thehiveproject/cortex:4.0.0
+    container_name: cortex
+    restart: unless-stopped
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "9001:9001"
+    volumes:
+      - ./cortex/config:/etc/cortex:ro
+      - ./cortex/neurons/analyzers:/opt/cortexneurons/analyzers:ro
+      - ./cortex/neurons/responders:/opt/cortexneurons/responders:ro
+      - cortex_jobs:/tmp/cortex-jobs
+      - /var/run/docker.sock:/var/run/docker.sock  # Cortex spawns analyzer containers
+    environment:
+      - JVM_OPTS=-Xms512m -Xmx1g
+    networks:
+      - thehive-cortex-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9001/cortex/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+  # ── Nginx reverse proxy (optional TLS termination) ────────
+  nginx:
+    image: nginx:1.29.5
+    container_name: nginx
+    restart: unless-stopped
+    depends_on:
+      - thehive
+      - cortex
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    networks:
+      - thehive-cortex-network
+
+volumes:
+  cassandra_data:
+  elasticsearch_data:
+  thehive_files:
+  cortex_jobs:
+
+networks:
+  thehive-cortex-network:
+    driver: bridge
+    name: testing_thehive-cortex-network

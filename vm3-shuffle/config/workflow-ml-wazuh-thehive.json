@@ -1,0 +1,176 @@
+{
+  "name": "ML-wazuh-thehive",
+  "description": "A-SOC: Wazuh ML alert → TheHive case + Cortex enrichment + Discord/Email notification",
+  "tags": ["ml-soc", "wazuh", "thehive", "cortex", "ensam"],
+  "notes": "Import this workflow into Shuffle, then update all <REPLACE_*> placeholders with your actual Tailscale IPs and API keys.",
+
+  "_readme": {
+    "vm1_ip":             "<REPLACE_VM1_TAILSCALE_IP>  e.g. 100.125.10.71",
+    "thehive_api_key":    "<REPLACE_THEHIVE_API_KEY>   from TheHive user 'shuffle-user'",
+    "cortex_api_key":     "<REPLACE_CORTEX_API_KEY>    from Cortex ENSAM org",
+    "discord_webhook":    "<REPLACE_DISCORD_WEBHOOK_URL>",
+    "gmail_user":         "<REPLACE_GMAIL_USER>",
+    "gmail_app_password": "<REPLACE_GMAIL_APP_PASSWORD>"
+  },
+
+  "nodes": [
+    {
+      "id": "wazuh-webhook",
+      "type": "trigger",
+      "label": "Wazuh-webhook",
+      "description": "Receives alerts from Wazuh Integratord via HTTP POST"
+    },
+    {
+      "id": "change-me",
+      "type": "shuffle-tools",
+      "label": "Change Me",
+      "action": "repeat_back_to_me",
+      "description": "Parses and passes Wazuh alert fields to downstream nodes"
+    },
+    {
+      "id": "create-alert",
+      "type": "thehive",
+      "label": "Create alert",
+      "action": "post_create_alert",
+      "url": "http://<REPLACE_VM1_TAILSCALE_IP>:9000/thehive",
+      "api_key": "<REPLACE_THEHIVE_API_KEY>",
+      "body": {
+        "title": "ML-SOC | $exec.all_fields.data.ml_label detected from $exec.all_fields.data.src_ip",
+        "description": "Wazuh ML alert - Rule: $exec.all_fields.rule.description",
+        "severity": 3,
+        "status": "New",
+        "tlp": 2,
+        "tags": ["ml-soc", "wazuh", "$exec.all_fields.data.ml_label"]
+      }
+    },
+    {
+      "id": "post-ip-to-alert",
+      "type": "http",
+      "label": "POST ip to alert",
+      "method": "POST",
+      "url": "http://<REPLACE_VM1_TAILSCALE_IP>:9000/thehive/api/v1/alert/$create_alert.body._id/observable",
+      "headers": {
+        "Authorization": "Bearer <REPLACE_THEHIVE_API_KEY>",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "dataType": "ip",
+        "data": "$exec.text.src_ip",
+        "message": "Source IP from Wazuh alert",
+        "tlp": 2,
+        "ioc": true
+      }
+    },
+    {
+      "id": "create-case",
+      "type": "thehive",
+      "label": "Create case",
+      "action": "post_create_case_from_alert",
+      "url": "http://<REPLACE_VM1_TAILSCALE_IP>:9000/thehive",
+      "api_key": "<REPLACE_THEHIVE_API_KEY>",
+      "alert_id": "$create_alert.body._id"
+    },
+    {
+      "id": "run-virustotal",
+      "type": "http",
+      "label": "Run virustotal",
+      "method": "POST",
+      "url": "http://<REPLACE_VM1_TAILSCALE_IP>:9001/cortex/api/analyzer/VirusTotal_GetReport_3_1/run",
+      "headers": {
+        "Authorization": "Bearer <REPLACE_CORTEX_API_KEY>",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "data": "$exec.text.src_ip",
+        "dataType": "ip",
+        "tlp": 2
+      }
+    },
+    {
+      "id": "sleep-vt",
+      "type": "python",
+      "label": "Sleep (VT)",
+      "code": "import time\ntime.sleep(30)\nreturn 'done'",
+      "description": "Wait 30s for VirusTotal Cortex job to complete"
+    },
+    {
+      "id": "get-vt-report",
+      "type": "http",
+      "label": "Get vt report",
+      "method": "GET",
+      "url": "http://<REPLACE_VM1_TAILSCALE_IP>:9001/cortex/api/job/$run_virustotal.body.id/report",
+      "headers": {
+        "Authorization": "Bearer <REPLACE_CORTEX_API_KEY>"
+      }
+    },
+    {
+      "id": "run-abuseipdb",
+      "type": "http",
+      "label": "Run AbuseIPDB",
+      "method": "POST",
+      "url": "http://<REPLACE_VM1_TAILSCALE_IP>:9001/cortex/api/analyzer/AbuseIPDB_2_0/run",
+      "headers": {
+        "Authorization": "Bearer <REPLACE_CORTEX_API_KEY>",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "data": "$exec.text.src_ip",
+        "dataType": "ip",
+        "tlp": 2
+      }
+    },
+    {
+      "id": "sleep-abuseipdb",
+      "type": "python",
+      "label": "Sleep (AbuseIPDB)",
+      "code": "import time\ntime.sleep(30)\nreturn 'done'",
+      "description": "Wait 30s for AbuseIPDB Cortex job to complete"
+    },
+    {
+      "id": "get-abuseipdb-report",
+      "type": "http",
+      "label": "Get abuseipdb report",
+      "method": "GET",
+      "url": "http://<REPLACE_VM1_TAILSCALE_IP>:9001/cortex/api/job/$run_abuseipdb.body.id/report",
+      "headers": {
+        "Authorization": "Bearer <REPLACE_CORTEX_API_KEY>"
+      }
+    },
+    {
+      "id": "discord",
+      "type": "discord",
+      "label": "Discord 1",
+      "action": "post_message",
+      "webhook_url": "<REPLACE_DISCORD_WEBHOOK_URL>",
+      "message": "🚨 **ML-SOC ALERT** | IP: $exec.all_fields.data.src_ip | Label: $exec.all_fields.data.ml_label | Severity: $exec.severity\n\n🔍 **VirusTotal:** Antiy: $get_vt_report.body.report.full.attributes.last_analysis_results.Antiy-AVL.result | AlienVault: $get_vt_report.body.report.full.attributes.last_analysis_results.AlienVault.result | Fortinet: $get_vt_report.body.report.full.attributes.last_analysis_results.Fortinet.result\n\n🛡️ **AbuseIPDB:** Score: $get_abuseipdb_report.body.report.full.values.#.data.abuseConfidenceScore | Tor: $get_abuseipdb_report.body.report.full.values.#.data.isTor | Country: $get_abuseipdb_report.body.report.full.values.#.data.countryName\n\n⏰ $exec.all_fields.timestamp | A-SOC ENSAM"
+    },
+    {
+      "id": "email",
+      "type": "email",
+      "label": "Email 1",
+      "smtp_host": "smtp.gmail.com",
+      "smtp_port": 587,
+      "username": "<REPLACE_GMAIL_USER>",
+      "password": "<REPLACE_GMAIL_APP_PASSWORD>",
+      "recipients": ["<REPLACE_GMAIL_USER>"],
+      "subject": "🚨 ML-SOC Alert - $exec.all_fields.data.ml_label detected",
+      "body": "WAZUH ML-SOC ALERT\n\nRule: $exec.all_fields.rule.description\nSource IP: $exec.all_fields.data.src_ip\nDestination: $exec.all_fields.data.dst_ip\nML Label: $exec.all_fields.data.ml_label\nSeverity: $exec.severity\nTimestamp: $exec.all_fields.timestamp\n\nVirusTotal: $get_vt_report.body.report.full.malicious detections\nAbuseIPDB Score: $get_abuseipdb_report.body.report.full.values.#.data.abuseConfidenceScore\n\nPlease investigate immediately!\nA-SOC Project - ENSAM Casablanca"
+    }
+  ],
+
+  "edges": [
+    { "from": "wazuh-webhook",       "to": "change-me" },
+    { "from": "change-me",           "to": "create-alert" },
+    { "from": "create-alert",        "to": "post-ip-to-alert" },
+    { "from": "create-alert",        "to": "create-case" },
+    { "from": "create-case",         "to": "run-virustotal" },
+    { "from": "create-case",         "to": "run-abuseipdb" },
+    { "from": "run-virustotal",      "to": "sleep-vt" },
+    { "from": "sleep-vt",            "to": "get-vt-report" },
+    { "from": "run-abuseipdb",       "to": "sleep-abuseipdb" },
+    { "from": "sleep-abuseipdb",     "to": "get-abuseipdb-report" },
+    { "from": "get-vt-report",       "to": "discord" },
+    { "from": "get-abuseipdb-report","to": "discord" },
+    { "from": "discord",             "to": "email" }
+  ]
+}
