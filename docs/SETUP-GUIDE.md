@@ -24,7 +24,7 @@ Import each OVA in VirtualBox (**File → Import Appliance**) in this order:
 | `vm2-wazuh.ova` | 8 GB |
 | `vm3-shuffle.ova` | 8 GB |
 
-Default login for all VMs: `vboxuser` / `vboxuser`  
+Default login for all VMs: `vboxuser` / `12345678`  
 **Change passwords immediately** after first boot.
 
 Set each VM's network adapter to **Bridged** (or NAT with port forwarding) so they can reach the internet for Tailscale authentication.
