@@ -2,7 +2,7 @@
 
 > **ENSAM Casablanca** | Cybersecurity & Cloud Computing  
 > Supervised by: **Mme Rihab Benaich**  
-> Author: **Yassine El Majouli**
+> Author: **Yassine El Majouli , Mokaddem Abdennour , Elhamile Hatim ,  Ibrahim gourgaiz**
 
 A fully automated SOC platform that uses **Machine Learning** to detect network attacks and orchestrates the full incident-response pipeline — from detection to case management and analyst notification.
 
@@ -92,8 +92,11 @@ Dashboard             POST IP observable
 | **VM2** | Wazuh SIEM (All-in-One) | `100.89.154.73` | `vm2-wazuh.ova` |
 | **VM3** | Shuffle SOAR | `100.117.88.123` | `vm3-shuffle.ova` |
 
-> OVA files are hosted separately — see [Releases](../../releases) for download links.  
-> Default VM credentials: `user: vboxuser` / `pass: vboxuser` (change after import).
+> OVA files are hosted on :
+- [vm1-thehive-cortex](https://github.com/elmajouli-yassine/A-soc_automation_project/tree/master/vm1-thehive-cortex/thehive-cortex_VM.md)
+- [vm2-wazuh](https://github.com/elmajouli-yassine/A-soc_automation_project/tree/master/vm2-wazuh/VM-OVA-FORMAT-LINK-MEGA.md)
+- [vm3-shuffle](https://github.com/elmajouli-yassine/A-soc_automation_project/tree/master/vm3-shuffle/shuffle-VM.md)
+> Default VM credentials: `user: vboxuser` / `pass: 12345678` (change after import).
 
 ---
 
@@ -106,6 +109,7 @@ a-soc-project/
 ├── .env.example                     ← Template for all secrets
 │
 ├── vm1-thehive-cortex/              ← VM1: TheHive + Cortex stack
+|   |── thehive-cortex_VM.md
 │   ├── docker-compose.yml           ← Full stack definition
 │   ├── .env.example
 │   ├── thehive/
@@ -123,6 +127,7 @@ a-soc-project/
 │       └── fix-permissions.sh       ← Fix Cortex job dir perms
 │
 ├── vm2-wazuh/                       ← VM2: Wazuh SIEM
+|   |── VM-OVA-FORMAT-LINK-MEGA.md
 │   ├── config/
 │   │   ├── ossec.conf               ← Wazuh manager config (localfile block)
 │   │   ├── decoders/
@@ -135,6 +140,7 @@ a-soc-project/
 │       └── create-opensearch-index.sh ← Creates ml-soc-alerts index + mapping
 │
 ├── vm3-shuffle/                     ← VM3: Shuffle SOAR
+|   |── shuffle-VM.md
 │   ├── docker-compose.yml           ← Shuffle stack definition
 │   ├── .env.example
 │   ├── config/
@@ -240,12 +246,6 @@ Key secrets needed:
 | DDoS | 100400/100401 | 14–15 | T1498 |
 | Bot | 100500/100501 | 10–13 | T1071 |
 | Web Attack | 100600/100601 | 12–14 | T1190 |
-
----
-
-## 📜 License
-
-MIT — see [LICENSE](LICENSE)
 
 ---
 
