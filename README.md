@@ -2,7 +2,7 @@
 
 > **ENSAM Casablanca** | Cybersecurity & Cloud Computing  
 > Supervised by: **Mme Rihab Benaich**  
-> Author: **Yassine El Majouli , Mokaddem Abdennour , Elhamile Hatim ,  Ibrahim gourgaiz**
+> Authors: **Yassine El Majouli , Mokaddem Abdennour , Elhamile Hatim ,  Ibrahim gourgaiz**
 
 A fully automated SOC platform that uses **Machine Learning** to detect network attacks and orchestrates the full incident-response pipeline — from detection to case management and analyst notification.
 
@@ -14,34 +14,34 @@ A fully automated SOC platform that uses **Machine Learning** to detect network 
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Tailscale VPN Mesh Network                   │
 │                                                                 │
-│  ┌──────────────────┐      ┌──────────────────┐                │
-│  │   VM2 — Wazuh    │      │  VM3 — Shuffle   │                │
-│  │  100.89.154.73   │─────▶│  100.117.88.123  │                │
-│  │                  │      │                  │                │
-│  │  • Wazuh Manager │      │  • Shuffle SOAR  │                │
-│  │  • OpenSearch    │      │  • OpenSearch    │                │
-│  │  • Dashboard     │      │    (internal)    │                │
-│  │  • ml_server.py  │      │                  │                │
-│  └──────────────────┘      └────────┬─────────┘                │
+│  ┌──────────────────┐      ┌──────────────────┐                 │
+│  │   VM2 — Wazuh    │      │  VM3 — Shuffle   │                 │
+│  │  100.89.154.73   │────▶│  100.117.88.123   │                │
+│  │                  │      │                  │                 │
+│  │  • Wazuh Manager │      │  • Shuffle SOAR  │                 │
+│  │  • OpenSearch    │      │  • OpenSearch    │                 │
+│  │  • Dashboard     │      │    (internal)    │                 │
+│  │  • ml_server.py  │      │                  │                 │
+│  └──────────────────┘      └────────┬─────────┘                 │
 │           ▲                         │                           │
 │           │ ML predictions          │ Webhook alerts            │
 │           │ (HTTP/Tailscale)        ▼                           │
-│  ┌────────┴─────────┐      ┌──────────────────┐                │
-│  │ ML Pipeline      │      │ VM1 — TheHive    │                │
-│  │ (your machine)   │      │  100.125.10.71   │                │
-│  │                  │      │                  │                │
-│  │ • DDoS           │      │ • TheHive  :9000 │                │
-│  │ • PortScan       │      │ • Cortex   :9001 │                │
-│  │ • BruteForce     │      │ • Cassandra      │                │
-│  │ • Bot            │      │ • Elasticsearch  │                │
-│  │ • WebAttack      │      │ • Nginx (TLS)    │                │
-│  └──────────────────┘      └──────────────────┘                │
+│  ┌────────┴─────────┐      ┌──────────────────┐                 │
+│  │ ML Pipeline      │      │ VM1 — TheHive    │                 │
+│  │ (your machine)   │      │  100.125.10.71   │                 │
+│  │                  │      │                  │                 │
+│  │ • DDoS           │      │ • TheHive  :9000 │                 │
+│  │ • PortScan       │      │ • Cortex   :9001 │                 │
+│  │ • BruteForce     │      │ • Cassandra      │                 │
+│  │ • Bot            │      │ • Elasticsearch  │                 │
+│  │ • WebAttack      │      │ • Nginx (TLS)    │                 │
+│  └──────────────────┘      └──────────────────┘                 │
 │                                                                 │
-│              ┌──────────────────────────┐                      │
-│              │   Notifications          │                      │
-│              │  • Discord (webhook)     │                      │
-│              │  • Email (Gmail SMTP)    │                      │
-│              └──────────────────────────┘                      │
+│              ┌──────────────────────────┐                       │
+│              │   Notifications          │                       │
+│              │  • Discord (webhook)     │                       │
+│              │  • Email (Gmail SMTP)    │                       │
+│              └──────────────────────────┘                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
