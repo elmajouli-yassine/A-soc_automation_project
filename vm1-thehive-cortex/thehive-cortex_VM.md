@@ -1,3 +1,4 @@
 # Installation of TheHive-Cortex VM
 
-📦 Download link: [Google Drive](https://drive.google.com/file/d/1zUcOhmbvceVQYMU8x0Izybi9HbFBdQLR/view?usp=sharing)
+- 📦 Download link: [Google Drive](https://drive.google.com/file/d/1zUcOhmbvceVQYMU8x0Izybi9HbFBdQLR/view?usp=sharing)
+- 📦 Download link: [Mega](https://mega.nz/file/QMM1RZLY#wtP5PLpqBIIE4e_JKvdBPayqDpNFEeNpfeXlO31ttqA)
