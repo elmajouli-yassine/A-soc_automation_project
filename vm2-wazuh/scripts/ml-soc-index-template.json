@@ -1,0 +1,100 @@
+{
+  "index_patterns": ["ml-soc-predictions-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "refresh_interval": "5s",
+      "index.mapping.total_fields.limit": 200
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+
+        "@timestamp": {
+          "type": "date",
+          "format": "strict_date_optional_time||epoch_millis"
+        },
+
+        "timestamp": {
+          "type": "date",
+          "format": "strict_date_optional_time||epoch_millis"
+        },
+
+        "inject_ts": {
+          "type": "date",
+          "format": "strict_date_optional_time||epoch_millis"
+        },
+
+        "ml_label": {
+          "type": "keyword",
+          "doc_values": true
+        },
+
+        "confidence": {
+          "type": "float"
+        },
+
+        "src_ip": {
+          "type": "ip"
+        },
+
+        "src_port": {
+          "type": "integer"
+        },
+
+        "dst_ip": {
+          "type": "ip"
+        },
+
+        "dst_port": {
+          "type": "integer"
+        },
+
+        "protocol": {
+          "type": "keyword"
+        },
+
+        "flow_duration": {
+          "type": "float"
+        },
+
+        "wazuh_rule_id": {
+          "type": "keyword"
+        },
+
+        "wazuh_rule_level": {
+          "type": "integer"
+        },
+
+        "wazuh_rule_description": {
+          "type": "text",
+          "fields": {
+            "keyword": { "type": "keyword" }
+          }
+        },
+
+        "wazuh_groups": {
+          "type": "keyword"
+        },
+
+        "mitre_id": {
+          "type": "keyword"
+        },
+
+        "high_confidence": {
+          "type": "boolean"
+        }
+      }
+    },
+    "aliases": {
+      "ml-soc-predictions": {}
+    }
+  },
+  "priority": 100,
+  "version": 1,
+  "_meta": {
+    "description": "ML-SOC — Index template pour prédictions pipeline ML",
+    "labels": ["Normal", "PortScan", "Brute Force", "DDoS", "Bot", "Web Attack"]
+  }
+}
