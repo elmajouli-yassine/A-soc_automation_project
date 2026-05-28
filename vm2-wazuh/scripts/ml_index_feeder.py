@@ -1,155 +1,154 @@
 #!/usr/bin/env python3
 """
-=============================================================
- ml_index_feeder.py — Real-time OpenSearch index feeder
- A-SOC Project — ENSAM Casablanca
-
- Tails /var/ossec/logs/alerts/alerts.json, filters only
- ML-SOC events, and indexes them into the custom index
- "ml-soc-alerts" with a deduplication key.
-
- Usage:
-   python3 ml_index_feeder.py
-
- Requires:
-   pip install requests
-=============================================================
+ML-SOC | Index Feeder
+======================
+Lit alerts.json en temps réel, filtre les alertes ML-SOC
+et les envoie dans OpenSearch index 'ml-soc-alerts'.
+Sans doublons grâce au _id unique + position file.
 """
 
 import json
-import logging
-import os
 import time
-import urllib3
+import logging
+import sys
+import urllib.request
+import urllib.error
+import urllib.parse
+import ssl
+import base64
 from pathlib import Path
 
-import requests
-
-# ── Configuration ─────────────────────────────────────────────
+# ── Configuration ─────────────────────────────────────────
 ALERTS_FILE   = "/var/ossec/logs/alerts/alerts.json"
-POSITION_FILE = "/var/log/ml-soc/feeder.pos"
-INDEX_NAME    = "ml-soc-alerts"
 OS_URL        = "https://127.0.0.1:9200"
+OS_INDEX      = "ml-soc-alerts"
 OS_USER       = "admin"
-OS_PASS       = os.getenv("OPENSEARCH_PASSWORD", "StrongOpenSearch321!")
-ML_LOG_SOURCE = "/var/log/ml-soc/predictions.log"
-POLL_INTERVAL = 1  # seconds between file checks
+OS_PASS       = "jabN8RE?RFACKnf+1Mt*14rppaLJaTAp"
+ML_SOC_SOURCE = "/var/log/ml-soc/predictions.log"
+POLL_INTERVAL = 0.5
+POSITION_FILE = "/var/log/ml-soc/feeder.pos"
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# ── Logging ───────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
 )
-logger = logging.getLogger("ml_feeder")
+log = logging.getLogger("ml-index-feeder")
+
+# ── SSL + Auth ────────────────────────────────────────────
+ssl_ctx = ssl.create_default_context()
+ssl_ctx.check_hostname = False
+ssl_ctx.verify_mode = ssl.CERT_NONE
+
+credentials = base64.b64encode(f"{OS_USER}:{OS_PASS}".encode()).decode()
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": f"Basic {credentials}"
+}
 
 
-def load_position() -> int:
+def send_to_opensearch(doc: dict) -> bool:
+    """Envoie un document dans OpenSearch avec _id unique pour éviter doublons."""
+    # ID unique basé sur timestamp + src_ip + rule_id
+    raw_id  = f"{doc.get('wazuh_timestamp','')}_{doc.get('src_ip','')}_{doc.get('rule_id','')}"
+    doc_id  = urllib.parse.quote(raw_id, safe='')
+    url     = f"{OS_URL}/{OS_INDEX}/_doc/{doc_id}"
+    body    = json.dumps(doc).encode("utf-8")
+    req     = urllib.request.Request(url, data=body, headers=headers, method="PUT")
     try:
-        return int(Path(POSITION_FILE).read_text().strip())
-    except (FileNotFoundError, ValueError):
-        return 0
-
-
-def save_position(pos: int):
-    Path(POSITION_FILE).parent.mkdir(parents=True, exist_ok=True)
-    Path(POSITION_FILE).write_text(str(pos))
+        with urllib.request.urlopen(req, context=ssl_ctx, timeout=5) as resp:
+            result = json.loads(resp.read())
+            return result.get("result") in ("created", "updated")
+    except urllib.error.URLError as e:
+        log.error("OpenSearch error: %s", e)
+        return False
 
 
 def parse_alert(line: str) -> dict | None:
-    """Parse one JSON alert line; return None if not an ML-SOC event."""
+    """Parse une ligne JSON de alerts.json et retourne un doc ML-SOC ou None."""
     try:
-        alert = json.loads(line)
+        alert = json.loads(line.strip())
     except json.JSONDecodeError:
         return None
 
-    if alert.get("location") != ML_LOG_SOURCE:
+    # Filtre — uniquement les alertes venant de predictions.log
+    if alert.get("location") != ML_SOC_SOURCE:
         return None
 
-    data = alert.get("data", {})
-    rule = alert.get("rule", {})
-
-    wazuh_ts = alert.get("timestamp", "")
-    src_ip   = data.get("src_ip", "")
-    rule_id  = str(rule.get("id", ""))
+    data  = alert.get("data", {})
+    rule  = alert.get("rule", {})
+    mitre = rule.get("mitre", {})
 
     return {
-        "_id": f"{wazuh_ts}_{src_ip}_{rule_id}",
-        "doc": {
-            "wazuh_timestamp": wazuh_ts,
-            "timestamp":       data.get("timestamp", wazuh_ts),
-            "ml_label":        data.get("ml_label", ""),
-            "src_ip":          src_ip,
-            "dst_ip":          data.get("dst_ip", ""),
-            "src_port":        int(data.get("src_port", 0)),
-            "dst_port":        int(data.get("dst_port", 0)),
-            "protocol":        data.get("protocol", ""),
-            "flow_duration":   float(data.get("flow_duration", 0)),
-            "confidence":      float(data.get("confidence", 0)),
-            "rule_id":         rule_id,
-            "rule_level":      int(rule.get("level", 0)),
-            "rule_description": rule.get("description", ""),
-            "mitre_id":        (rule.get("mitre", {}).get("id", [None]) or [None])[0],
-        },
+        "wazuh_timestamp":  alert.get("timestamp"),
+        "timestamp":        data.get("timestamp"),
+        "ml_label":         data.get("ml_label"),
+        "src_ip":           data.get("src_ip"),
+        "dst_ip":           data.get("dst_ip"),
+        "src_port":         int(data.get("src_port", 0)),
+        "dst_port":         int(data.get("dst_port", 0)),
+        "protocol":         data.get("protocol"),
+        "flow_duration":    float(data.get("flow_duration", 0)),
+        "confidence":       float(data.get("confidence", 0)),
+        "rule_id":          rule.get("id"),
+        "rule_level":       rule.get("level"),
+        "rule_description": rule.get("description"),
+        "mitre_id":         mitre.get("id", []),
     }
 
 
-def index_document(doc_id: str, doc: dict) -> bool:
-    url = f"{OS_URL}/{INDEX_NAME}/_doc/{doc_id}"
-    try:
-        r = requests.put(
-            url,
-            json=doc,
-            auth=(OS_USER, OS_PASS),
-            verify=False,
-            timeout=10,
-        )
-        if r.status_code in (200, 201):
-            return True
-        logger.warning("Index failed (%d): %s", r.status_code, r.text[:200])
-        return False
-    except requests.RequestException as exc:
-        logger.error("OpenSearch request error: %s", exc)
-        return False
+def tail_forever(filepath: str):
+    """Lit le fichier en temps réel en sauvegardant la position."""
+    log.info("Lecture de %s en temps réel...", filepath)
 
-
-def tail_and_feed():
-    position = load_position()
-    logger.info("Starting feeder | position=%d | index=%s", position, INDEX_NAME)
-
-    while True:
+    # Lire la dernière position sauvegardée
+    last_pos = 0
+    if Path(POSITION_FILE).exists():
         try:
-            with open(ALERTS_FILE, "r", encoding="utf-8", errors="replace") as fh:
-                fh.seek(position)
-                while True:
-                    line = fh.readline()
-                    if not line:
-                        time.sleep(POLL_INTERVAL)
-                        break
+            last_pos = int(Path(POSITION_FILE).read_text().strip())
+            log.info("Reprise depuis position : %d", last_pos)
+        except Exception:
+            last_pos = 0
+    else:
+        # Première fois → aller à la fin du fichier
+        last_pos = Path(filepath).stat().st_size
+        log.info("Première exécution → position fin : %d", last_pos)
 
-                    line = line.strip()
-                    if not line:
-                        continue
+    with open(filepath, "r", encoding="utf-8") as f:
+        f.seek(last_pos)
+        while True:
+            line = f.readline()
+            if line:
+                pos = f.tell()
+                Path(POSITION_FILE).write_text(str(pos))
+                yield line
+            else:
+                time.sleep(POLL_INTERVAL)
 
-                    parsed = parse_alert(line)
-                    if parsed:
-                        ok = index_document(parsed["_id"], parsed["doc"])
-                        if ok:
-                            logger.info(
-                                "Indexed | id=%-50s label=%s",
-                                parsed["_id"],
-                                parsed["doc"].get("ml_label"),
-                            )
 
-                    position = fh.tell()
-                    save_position(position)
+def main():
+    log.info("ML-SOC Index Feeder démarré")
+    log.info("Source  : %s", ALERTS_FILE)
+    log.info("Index   : %s/%s", OS_URL, OS_INDEX)
+    log.info("Filtre  : location = %s", ML_SOC_SOURCE)
 
-        except FileNotFoundError:
-            logger.warning("Alerts file not found, retrying in 5s…")
-            time.sleep(5)
-        except KeyboardInterrupt:
-            logger.info("Feeder stopped.")
-            break
+    for line in tail_forever(ALERTS_FILE):
+        doc = parse_alert(line)
+        if doc is None:
+            continue
+
+        label = doc.get("ml_label", "?")
+        src   = doc.get("src_ip", "?")
+        lvl   = doc.get("rule_level", "?")
+        conf  = doc.get("confidence", 0)
+
+        if send_to_opensearch(doc):
+            log.info("✅ Indexé | %-12s | %-15s | level=%-2s | conf=%.4f",
+                     label, src, lvl, conf)
+        else:
+            log.error("❌ Échec  | %-12s | %-15s", label, src)
 
 
 if __name__ == "__main__":
-    tail_and_feed()
+    main()
